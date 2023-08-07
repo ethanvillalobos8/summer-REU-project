@@ -9,8 +9,9 @@ from node2vec import Node2Vec
 import seaborn as sns
 
 # Load the dataset
-dataset_path = r'C:\Users\hlugo\OneDrive - The University of Texas-Rio Grande Valley\Documents\UCR\Highway-Rail_Grade_Crossing_Accident_Data.csv'
+dataset_path = r'C:\Users\hlugo\OneDrive - The University of Texas-Rio Grande Valley\Documents\REU GITHUB\summer-REU-project\Highway-Rail_Grade_Crossing_Accident_Data.csv'
 data_field = pd.read_csv(dataset_path, low_memory=False)
+
 
 # Get unique company codes and take the first 31
 companies = data_field['Railroad Code'].unique()[:31]

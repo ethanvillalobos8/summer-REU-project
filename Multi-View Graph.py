@@ -5,8 +5,9 @@ from mpl_toolkits.mplot3d import Axes3D
 
 
 # Load the dataset
-dataset_path = r'C:\Users\hlugo\OneDrive - The University of Texas-Rio Grande Valley\Documents\UCR\Highway-Rail_Grade_Crossing_Accident_Data.csv'
+dataset_path = r'C:\Users\hlugo\OneDrive - The University of Texas-Rio Grande Valley\Documents\REU GITHUB\summer-REU-project\Highway-Rail_Grade_Crossing_Accident_Data.csv'
 data_field = pd.read_csv(dataset_path, low_memory=False)
+
 # Remove missing values
 data_field = data_field.dropna(subset=['Railroad Code', 'County Code'])
 

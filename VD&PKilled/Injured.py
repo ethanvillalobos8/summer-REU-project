@@ -3,10 +3,10 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from itertools import combinations
 
-
 # Load the dataset
-dataset_path = r'C:\Users\hlugo\OneDrive - The University of Texas-Rio Grande Valley\Documents\UCR\Highway-Rail_Grade_Crossing_Accident_Data.csv'
+dataset_path = r'C:\Users\hlugo\OneDrive - The University of Texas-Rio Grande Valley\Documents\REU GITHUB\summer-REU-project\Highway-Rail_Grade_Crossing_Accident_Data.csv'
 data_field = pd.read_csv(dataset_path, low_memory=False)
+
 # Combine the "Killed" and "Injured" columns to get total casualties
 data_field['Total Casualties'] = data_field['Total Killed Form 57'] + data_field['Total Killed Form 55A'] + data_field['Total Injured Form 57'] + data_field['Total Injured Form 55A']
 
