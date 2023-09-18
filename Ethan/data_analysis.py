@@ -6,7 +6,7 @@ import seaborn as sns
 df_clusters = pd.read_csv('cluster_results.csv')
 
 # Load original data
-df_data = pd.read_csv('Datasets/Highway-Rail_Grade_Crossing_Accident_Data.csv')
+df_data = pd.read_csv('../Datasets/Highway-Rail_Grade_Crossing_Accident_Data.csv')
 
 # Merge cluster results with original data
 df = pd.merge(df_clusters, df_data, left_on='Node', right_on='Railroad Code', how='left')
