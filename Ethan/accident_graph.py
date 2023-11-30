@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 
 def generate_graph():
-    dataset_path = '../Datasets/Highway-Rail_Grade_Crossing_Accident_Data.csv'
+    dataset_path = 'Datasets/Highway-Rail_Grade_Crossing_Accident_Data.csv'
     data_field = pd.read_csv(dataset_path, low_memory=False)
 
     grouped_data = data_field.groupby(['Railroad Code', 'Incident Year', 'State Name']).size().reset_index(
@@ -13,7 +13,7 @@ def generate_graph():
     G = nx.Graph()
     G.add_nodes_from(grouped_data['Railroad Code'].unique())
 
-    # Experiment with different node attributes (categories of attributes, wetather related, maintincence, etc.)
+    # Experiment with different node attributes (categories of attributes, weather related, maintenance, etc.)
     for _, row in tqdm(grouped_data.iterrows(), total=grouped_data.shape[0]):
         railroad_code = row['Railroad Code']
         incident_year = row['Incident Year']

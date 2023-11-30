@@ -87,7 +87,7 @@ for label in set(labels):
 results.to_csv('cluster_results.csv', index=False)
 
 # Create a scatter plot to visualize the results
-plt.figure(figsize=(8, 8))
-for i in range(len(principalComponents)):
-    plt.scatter(principalComponents[i][0], principalComponents[i][1], color=plt.cm.nipy_spectral(labels[i] / 10.), s=7)
-plt.show()
+# plt.figure(figsize=(8, 8))
+# for i in range(len(principalComponents)):
+#     plt.scatter(principalComponents[i][0], principalComponents[i][1], color=plt.cm.nipy_spectral(labels[i] / 10.), s=7)
+# plt.show()
