@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 # Convert the graph to an adjacency matrix
 adj_matrix = nx.adjacency_matrix(G).toarray()
 
+print(adj_matrix)
+
 # Step 1: Apply RBF Kernel on the adjacency matrix
 gamma = 0.1
 adj_matrix_rbf = np.exp(-gamma * adj_matrix ** 2)

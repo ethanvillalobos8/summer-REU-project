@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 
 def generate_graph():
-    dataset_path = 'Datasets/Highway-Rail_Grade_Crossing_Accident_Data.csv'
+    dataset_path = '../Datasets/Highway-Rail_Grade_Crossing_Accident_Data.csv'
     data_field = pd.read_csv(dataset_path, low_memory=False)
 
     grouped_data = data_field.groupby(['Railroad Code', 'Incident Year', 'State Name']).size().reset_index(

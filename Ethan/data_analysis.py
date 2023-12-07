@@ -12,7 +12,7 @@ from sklearn.kernel_ridge import KernelRidge
 from sklearn.preprocessing import OneHotEncoder
 
 # Load original data
-df_data = pd.read_csv('../Datasets/Highway-Rail_Grade_Crossing_Accident_Data.csv')
+df_data = pd.read_csv('../Datasets/Highway-Rail_Grade_Crossing_Accident_Data.csv', dtype='str', low_memory=False)
 
 
 # Custom function to calculate Jaccard similarity
@@ -213,13 +213,13 @@ for cluster in df['Cluster'].unique():
             top_value = cluster_data[cluster_data['Railroad Code'] == top_railroad_code][factor].value_counts().idxmax()
             print(f"Top {factor} for Railroad {top_railroad_code}: {top_value}")
 
-# # Machine Learning Model
+# Machine Learning Model
 
 # Using a random subset of the data to improve runtime
 subset_fraction = 0.10  # 10% of dataset
 df = df.sample(frac=subset_fraction, random_state=42)
 
-# Define features and target variable based on the identified important features
+# Define features and target variable
 categorical_features = ['Highway User Position', 'Equipment Involved']
 numeric_features = ['Incident Year']
 target = 'Accident Count'
@@ -227,155 +227,95 @@ target = 'Accident Count'
 # Drop rows with missing values in the target variable
 df.dropna(subset=[target], inplace=True)
 
-
 # Convert 'Incident Year' to full year format
-def convert_year(year):
-    if year <= 21:
-        return 2000 + year
-    else:
-        return 1900 + year
+df['Incident Year'] = df['Incident Year'].apply(lambda year: 2000 + year if year <= 21 else 1900 + year)
 
-
-df['Incident Year'] = df['Incident Year'].apply(convert_year)
-
-# Training and evaluating the global model
+# Split the dataset
 X = df[numeric_features + categorical_features]
 y = df[target]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Use MinMaxScaler for the target variable
+# Scale the target variable
 y_scaler = MinMaxScaler()
 y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1)).ravel()
 y_test_scaled = y_scaler.transform(y_test.values.reshape(-1, 1)).ravel()
 
-# Preprocess data for global model using a single encoder
-encoder = OneHotEncoder(sparse_output=False, drop='first', handle_unknown='ignore')
+# One-hot encode categorical features
+encoder = OneHotEncoder(sparse=False, drop='first', handle_unknown='ignore')
 encoder.fit(df[categorical_features])
-
 X_train_encoded = encoder.transform(X_train[categorical_features])
 X_test_encoded = encoder.transform(X_test[categorical_features])
 
+# Combine numeric and encoded categorical features
 X_train_final = np.hstack((X_train[numeric_features].values, X_train_encoded))
 X_test_final = np.hstack((X_test[numeric_features].values, X_test_encoded))
 
-# Standardize the features using a single scaler
+# Standardize features
 scaler = StandardScaler()
 X_train_final = scaler.fit_transform(X_train_final)
 X_test_final = scaler.transform(X_test_final)
 
-# Preprocess data for global model with RBFSampler
-rbf_sampler = RBFSampler(n_components=18, random_state=42)
-X_train_final = rbf_sampler.fit_transform(X_train_final)
-X_test_final = rbf_sampler.transform(X_test_final)
-
-# Train a KernelRidge model for the global model
+# Train the global model
 global_model = KernelRidge(kernel='rbf')
 global_model.fit(X_train_final, y_train_scaled)
 
-# Make predictions for global model
+# Predict and inverse transform the predictions
 y_pred_scaled = global_model.predict(X_test_final)
 y_pred = y_scaler.inverse_transform(y_pred_scaled.reshape(-1, 1)).ravel()
 
-# Calculate RMSE for global model
+# Calculate RMSE for the global model
 global_rmse = np.sqrt(mean_squared_error(y_test_scaled, y_pred_scaled))
 print(f"Global Model RMSE: {global_rmse:.2f}")
 
+# Process and evaluate models for each cluster
 clusters = df['Cluster'].unique()
-cluster_performances = {}  # Store each cluster's performance
-
-cluster_models = {}  # Dictionary to store the models for each cluster
-
-cluster_scalers = {}  # Store scalers for each cluster
-y_cluster_scalers = {}  # Dictionary to store scalers for y for each cluster
+cluster_models = {}
+cluster_scalers = {}
+y_cluster_scalers = {}
 
 for cluster in clusters:
     df_cluster = df[df['Cluster'] == cluster]
-
-    # Split the data for this cluster
     X_cluster = df_cluster[numeric_features + categorical_features]
     y_cluster = df_cluster[target]
     X_train_cluster, X_test_cluster, y_train_cluster, y_test_cluster = train_test_split(
         X_cluster, y_cluster, test_size=0.2, random_state=42
     )
 
-    # Scale y for this cluster
+    # Scale target variable for cluster
     y_cluster_scaler = MinMaxScaler()
     y_train_cluster_scaled = y_cluster_scaler.fit_transform(y_train_cluster.values.reshape(-1, 1)).ravel()
     y_test_cluster_scaled = y_cluster_scaler.transform(y_test_cluster.values.reshape(-1, 1)).ravel()
-    y_cluster_scalers[cluster] = y_cluster_scaler  # Store the y scaler for this cluster
+    y_cluster_scalers[cluster] = y_cluster_scaler
 
-    # Preprocess data as before using the global encoder
+    # Preprocess cluster data
     X_train_encoded_cluster = encoder.transform(X_train_cluster[categorical_features])
-    X_train_final_cluster = np.hstack((X_train_cluster[numeric_features].values, X_train_encoded_cluster))
+    X_test_encoded_cluster = encoder.transform(X_test_cluster[categorical_features])
 
-    # Standardize the features for the training set using a cluster-specific scaler
+    # Combine numeric and encoded features
+    X_train_final_cluster = np.hstack((X_train_cluster[numeric_features].values, X_train_encoded_cluster))
+    X_test_final_cluster = np.hstack((X_test_cluster[numeric_features].values, X_test_encoded_cluster))
+
+    # Standardize cluster features
     cluster_scaler = StandardScaler()
     X_train_final_cluster = cluster_scaler.fit_transform(X_train_final_cluster)
-    cluster_scalers[cluster] = cluster_scaler  # Store the scaler for this cluster
-
-    # Preprocess the test data using the global encoder and cluster-specific scaler
-    X_test_encoded_cluster = encoder.transform(X_test_cluster[categorical_features])
-    X_test_final_cluster = np.hstack((X_test_cluster[numeric_features].values, X_test_encoded_cluster))
     X_test_final_cluster = cluster_scaler.transform(X_test_final_cluster)
+    cluster_scalers[cluster] = cluster_scaler
 
-    # Ensure that the test data has the same number of features as the training data
-    if isinstance(X_train_final_cluster, np.ndarray):
-        X_train_final_cluster = pd.DataFrame(X_train_final_cluster)
-        X_test_final_cluster = pd.DataFrame(X_test_final_cluster)
-
-    missing_cols = set(X_train_final_cluster.columns) - set(X_test_final_cluster.columns)
-    for c in missing_cols:
-        X_test_final_cluster[c] = 0
-
-    # Ensure the order of column in the test set is in the same order than in train set
-    X_test_final_cluster = X_test_final_cluster[X_train_final_cluster.columns]
-
-    print(
-        f"Before RBFSampler for Cluster {cluster} - Training: {X_train_final_cluster.shape[1]}, Test: {X_test_final_cluster.shape[1]}")
-
-    # Applying RBFSampler for this cluster
-    cluster_rbf_sampler = RBFSampler(n_components=18, random_state=42)
-    X_train_final_cluster = cluster_rbf_sampler.fit_transform(X_train_final_cluster)
-    X_test_final_cluster = cluster_rbf_sampler.transform(X_test_final_cluster)
-
-    print(
-        f"After RBFSampler for Cluster {cluster} - Training: {X_train_final_cluster.shape[1]}, Test: {X_test_final_cluster.shape[1]}")
-
-    # Check for feature mismatch
-    if X_train_final_cluster.shape[1] != X_test_final_cluster.shape[1]:
-        print(
-            f"Feature mismatch in Cluster {cluster}: Training has {X_train_final_cluster.shape[1]} features, Test has {X_test_final_cluster.shape[1]} features.")
-        continue
-
-    # Train a KernelRidge model and measure its training time
+    # Train the cluster-specific model
     model_cluster = KernelRidge(kernel='rbf')
     model_cluster.fit(X_train_final_cluster, y_train_cluster_scaled)
+    cluster_models[cluster] = model_cluster
 
-    cluster_models[cluster] = model_cluster  # Store the trained model
-
-    # Make predictions for this cluster
+    # Predict and inverse transform the cluster-specific predictions
     y_pred_cluster_scaled = model_cluster.predict(X_test_final_cluster)
     y_pred_cluster = y_cluster_scalers[cluster].inverse_transform(y_pred_cluster_scaled.reshape(-1, 1)).ravel()
 
-    # Calculate RMSE for this cluster and store
+    # Calculate and print RMSE for the cluster
     rmse_cluster = np.sqrt(mean_squared_error(y_test_cluster, y_pred_cluster))
-    cluster_performances[cluster] = rmse_cluster
+    print(f"Cluster {cluster}: RMSE: {rmse_cluster:.2f}")
 
-    # Print results for this cluster
-    print()
-    print(f"Cluster {cluster}:")
-    print(f"Root Mean Squared Error (RMSE): {rmse_cluster:.2f}")
-    print("-" * 50)
-
-# Compare the RMSE of each cluster-specific model with the RMSE of the global model
-print(f"Global Model RMSE (repeated for clarity): {global_rmse:.2f}")
-
-# Visualization
-# For the global model
-actual_values_global = y_test_scaled
-predicted_values_global = y_pred_scaled
-
-# Sorting and grouping by 'Incident Year'
+# Visualization for global and cluster-specific models
+# Global model visualization
 actual_test_accidents = y_test.groupby(X_test['Incident Year']).sum()
 predicted_test_accidents = pd.DataFrame({'Incident Year': X_test['Incident Year'], 'Predicted': y_pred}).groupby(
     'Incident Year').sum()
@@ -385,7 +325,7 @@ plt.plot(actual_test_accidents.index, actual_test_accidents.values, label='Actua
          color='green')
 plt.plot(predicted_test_accidents.index, predicted_test_accidents['Predicted'], label='Predicted (Test)', marker='x',
          color='red')
-plt.title('Yearly Accident Counts for Global Model (with RBFSampler): Actual vs Predicted')
+plt.title('Yearly Accident Counts for Global Model: Actual vs Predicted')
 plt.xlabel('Year')
 plt.ylabel('Accident Count')
 plt.legend()
@@ -398,25 +338,277 @@ for cluster in clusters:
     y_cluster = df_cluster[target]
     _, X_test_cluster, _, y_test_cluster = train_test_split(X_cluster, y_cluster, test_size=0.2, random_state=42)
 
-    # Preprocess the test data using the encoder and scaler specific to this cluster
+    # Preprocess the test data using the global encoder
     X_test_encoded_cluster = encoder.transform(X_test_cluster[categorical_features])
     X_test_final_cluster = np.hstack((X_test_cluster[numeric_features].values, X_test_encoded_cluster))
+
+    # Standardize the features for the test set using the cluster-specific scaler
     X_test_final_cluster = cluster_scalers[cluster].transform(X_test_final_cluster)
 
-    y_pred_cluster = cluster_models[cluster].predict(X_test_final_cluster)
+    # Make predictions for this cluster
+    y_pred_cluster_scaled = cluster_models[cluster].predict(X_test_final_cluster)
+    y_pred_cluster = y_cluster_scalers[cluster].inverse_transform(y_pred_cluster_scaled.reshape(-1, 1)).ravel()
 
+    # Visualization for this cluster
     actual_test_accidents_cluster = y_test_cluster.groupby(X_test_cluster['Incident Year']).sum()
-    predicted_test_accidents_cluster = pd.DataFrame(
-        {'Incident Year': X_test_cluster['Incident Year'], 'Predicted': y_pred_cluster}).groupby('Incident Year').sum()
+    predicted_test_accidents_cluster = pd.DataFrame({'Incident Year': X_test_cluster['Incident Year'], 'Predicted': y_pred_cluster}).groupby('Incident Year').sum()
 
     plt.figure(figsize=(15, 7))
-    plt.plot(actual_test_accidents_cluster.index, actual_test_accidents_cluster.values, label='Actual (Test)',
-             marker='o', linestyle='--', color='green')
-    plt.plot(predicted_test_accidents_cluster.index, predicted_test_accidents_cluster['Predicted'],
-             label='Predicted (Test)', marker='x', color='red')
-    plt.title(f'Yearly Accident Counts for Cluster {cluster} (with RBFSampler): Actual vs Predicted')
+    plt.plot(actual_test_accidents_cluster.index, actual_test_accidents_cluster.values, label='Actual (Test)', marker='o', linestyle='--', color='green')
+    plt.plot(predicted_test_accidents_cluster.index, predicted_test_accidents_cluster['Predicted'], label='Predicted (Test)', marker='x', color='red')
+    plt.title(f'Yearly Accident Counts for Cluster {cluster}: Actual vs Predicted')
     plt.xlabel('Year')
     plt.ylabel('Accident Count')
     plt.legend()
     plt.grid(True)
     plt.show()
+
+# Machine Learning Portion Using RBF Sampler
+
+# # Using a random subset of the data to improve runtime
+# subset_fraction = 0.10  # 10% of dataset
+# df = df.sample(frac=subset_fraction, random_state=42)
+#
+# # Define features and target variable based on the identified important features
+# categorical_features = ['Highway User Position', 'Equipment Involved']
+# numeric_features = ['Incident Year']
+# target = 'Accident Count'
+#
+# # Drop rows with missing values in the target variable
+# df.dropna(subset=[target], inplace=True)
+#
+#
+# # Convert 'Incident Year' to full year format
+# def convert_year(year):
+#     if year <= 21:
+#         return 2000 + year
+#     else:
+#         return 1900 + year
+#
+#
+# df['Incident Year'] = df['Incident Year'].apply(convert_year)
+#
+# # Training and evaluating the global model
+# X = df[numeric_features + categorical_features]
+# y = df[target]
+# X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+#
+# # Use MinMaxScaler for the target variable
+# y_scaler = MinMaxScaler()
+# y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1)).ravel()
+# y_test_scaled = y_scaler.transform(y_test.values.reshape(-1, 1)).ravel()
+#
+# # Preprocess data for global model using a single encoder
+# encoder = OneHotEncoder(sparse_output=False, drop='first', handle_unknown='ignore')
+# encoder.fit(df[categorical_features])
+#
+# X_train_encoded = encoder.transform(X_train[categorical_features])
+# X_test_encoded = encoder.transform(X_test[categorical_features])
+#
+# X_train_final = np.hstack((X_train[numeric_features].values, X_train_encoded))
+# X_test_final = np.hstack((X_test[numeric_features].values, X_test_encoded))
+#
+# # Standardize the features using a single scaler
+# scaler = StandardScaler()
+# X_train_final = scaler.fit_transform(X_train_final)
+# X_test_final = scaler.transform(X_test_final)
+#
+# # Preprocess data for global model with RBFSampler
+# rbf_sampler = RBFSampler(n_components=18, random_state=42)
+# X_train_final = rbf_sampler.fit_transform(X_train_final)
+# X_test_final = rbf_sampler.transform(X_test_final)
+#
+# # Train a KernelRidge model for the global model
+# global_model = KernelRidge(kernel='rbf')
+# global_model.fit(X_train_final, y_train_scaled)
+#
+# # Make predictions for global model
+# y_pred_scaled = global_model.predict(X_test_final)
+# y_pred = y_scaler.inverse_transform(y_pred_scaled.reshape(-1, 1)).ravel()
+#
+# # Calculate RMSE for global model
+# global_rmse = np.sqrt(mean_squared_error(y_test_scaled, y_pred_scaled))
+# print(f"Global Model RMSE: {global_rmse:.2f}")
+#
+# clusters = df['Cluster'].unique()
+#
+# cluster_performances = {}  # Store each cluster's performance
+# cluster_models = {}  # Dictionary to store the models for each cluster
+# cluster_scalers = {}  # Store scalers for each cluster
+# y_cluster_scalers = {}  # Dictionary to store scalers for y for each cluster
+# cluster_rbfsamplers = {}  # Initialize a dictionary to store the RBFSampler for each cluster
+#
+# for cluster in clusters:
+#     df_cluster = df[df['Cluster'] == cluster]
+#
+#     # Split the data for this cluster
+#     X_cluster = df_cluster[numeric_features + categorical_features]
+#     y_cluster = df_cluster[target]
+#     X_train_cluster, X_test_cluster, y_train_cluster, y_test_cluster = train_test_split(
+#         X_cluster, y_cluster, test_size=0.2, random_state=42
+#     )
+#
+#     # Scale y for this cluster
+#     y_cluster_scaler = MinMaxScaler()
+#     y_train_cluster_scaled = y_cluster_scaler.fit_transform(y_train_cluster.values.reshape(-1, 1)).ravel()
+#     y_test_cluster_scaled = y_cluster_scaler.transform(y_test_cluster.values.reshape(-1, 1)).ravel()
+#     y_cluster_scalers[cluster] = y_cluster_scaler  # Store the y scaler for this cluster
+#
+#     # Preprocess data as before using the global encoder
+#     X_train_encoded_cluster = encoder.transform(X_train_cluster[categorical_features])
+#     X_train_final_cluster = np.hstack((X_train_cluster[numeric_features].values, X_train_encoded_cluster))
+#
+#     # Standardize the features for the training set using a cluster-specific scaler
+#     cluster_scaler = StandardScaler()
+#     X_train_final_cluster = cluster_scaler.fit_transform(X_train_final_cluster)
+#     cluster_scalers[cluster] = cluster_scaler  # Store the scaler for this cluster
+#
+#     # Preprocess the test data using the global encoder and cluster-specific scaler
+#     X_test_encoded_cluster = encoder.transform(X_test_cluster[categorical_features])
+#     X_test_final_cluster = np.hstack((X_test_cluster[numeric_features].values, X_test_encoded_cluster))
+#     X_test_final_cluster = cluster_scaler.transform(X_test_final_cluster)
+#
+#     # Ensure that the test data has the same number of features as the training data
+#     if isinstance(X_train_final_cluster, np.ndarray):
+#         X_train_final_cluster = pd.DataFrame(X_train_final_cluster)
+#         X_test_final_cluster = pd.DataFrame(X_test_final_cluster)
+#
+#     missing_cols = set(X_train_final_cluster.columns) - set(X_test_final_cluster.columns)
+#     for c in missing_cols:
+#         X_test_final_cluster[c] = 0
+#
+#     # Ensure the order of column in the test set is in the same order than in train set
+#     X_test_final_cluster = X_test_final_cluster[X_train_final_cluster.columns]
+#
+#     print(
+#         f"Before RBFSampler for Cluster {cluster} - Training: {X_train_final_cluster.shape[1]}, Test: {X_test_final_cluster.shape[1]}")
+#
+#     # Applying RBFSampler for this cluster
+#     cluster_rbf_sampler = RBFSampler(n_components=18, random_state=42)
+#     X_train_final_cluster = cluster_rbf_sampler.fit_transform(X_train_final_cluster)
+#     X_test_final_cluster = cluster_rbf_sampler.transform(X_test_final_cluster)
+#
+#     print(
+#         f"After RBFSampler for Cluster {cluster} - Training: {X_train_final_cluster.shape[1]}, Test: {X_test_final_cluster.shape[1]}")
+#
+#     # Check for feature mismatch
+#     if X_train_final_cluster.shape[1] != X_test_final_cluster.shape[1]:
+#         print(
+#             f"Feature mismatch in Cluster {cluster}: Training has {X_train_final_cluster.shape[1]} features, Test has {X_test_final_cluster.shape[1]} features.")
+#         continue
+#
+#     # Train a KernelRidge model and measure its training time
+#     model_cluster = KernelRidge(kernel='rbf')
+#     model_cluster.fit(X_train_final_cluster, y_train_cluster_scaled)
+#
+#     cluster_models[cluster] = model_cluster  # Store the trained model
+#
+#     # Make predictions for this cluster
+#     y_pred_cluster_scaled = model_cluster.predict(X_test_final_cluster)
+#     y_pred_cluster = y_cluster_scalers[cluster].inverse_transform(y_pred_cluster_scaled.reshape(-1, 1)).ravel()
+#
+#     # Calculate RMSE for this cluster and store
+#     rmse_cluster = np.sqrt(mean_squared_error(y_test_cluster, y_pred_cluster))
+#     cluster_performances[cluster] = rmse_cluster
+#
+#     # Print results for this cluster
+#     print()
+#     print(f"Cluster {cluster}:")
+#     print(f"Root Mean Squared Error (RMSE): {rmse_cluster:.2f}")
+#     print("-" * 50)
+#
+# # Compare the RMSE of each cluster-specific model with the RMSE of the global model
+# print(f"Global Model RMSE (repeated for clarity): {global_rmse:.2f}")
+#
+# # Visualization
+# # For the global model
+# actual_values_global = y_test_scaled
+# predicted_values_global = y_pred_scaled
+#
+# # Sorting and grouping by 'Incident Year'
+# actual_test_accidents = y_test.groupby(X_test['Incident Year']).sum()
+# predicted_test_accidents = pd.DataFrame({'Incident Year': X_test['Incident Year'], 'Predicted': y_pred}).groupby(
+#     'Incident Year').sum()
+#
+# plt.figure(figsize=(15, 7))
+# plt.plot(actual_test_accidents.index, actual_test_accidents.values, label='Actual (Test)', marker='o', linestyle='--',
+#          color='green')
+# plt.plot(predicted_test_accidents.index, predicted_test_accidents['Predicted'], label='Predicted (Test)', marker='x',
+#          color='red')
+# plt.title('Yearly Accident Counts for Global Model (with RBFSampler): Actual vs Predicted')
+# plt.xlabel('Year')
+# plt.ylabel('Accident Count')
+# plt.legend()
+# plt.grid(True)
+#
+# # For each cluster-specific model
+# for cluster in clusters:
+#     df_cluster = df[df['Cluster'] == cluster]
+#     X_cluster = df_cluster[numeric_features + categorical_features]
+#     y_cluster = df_cluster[target]
+#     X_train_cluster, X_test_cluster, y_train_cluster, y_test_cluster = train_test_split(
+#         X_cluster, y_cluster, test_size=0.2, random_state=42
+#     )
+#
+#     # Scale y for this cluster
+#     y_cluster_scaler = MinMaxScaler()
+#     y_train_cluster_scaled = y_cluster_scaler.fit_transform(y_train_cluster.values.reshape(-1, 1)).ravel()
+#     y_test_cluster_scaled = y_cluster_scaler.transform(y_test_cluster.values.reshape(-1, 1)).ravel()
+#     y_cluster_scalers[cluster] = y_cluster_scaler  # Store the y scaler for this cluster
+#
+#     # Preprocess data as before using the global encoder
+#     X_train_encoded_cluster = encoder.transform(X_train_cluster[categorical_features])
+#     X_test_encoded_cluster = encoder.transform(X_test_cluster[categorical_features])
+#
+#     # Construct the full feature set for the training data
+#     X_train_final_cluster = np.hstack((X_train_cluster[numeric_features].values, X_train_encoded_cluster))
+#
+#     # Construct the full feature set for the test data
+#     X_test_final_cluster = np.hstack((X_test_cluster[numeric_features].values, X_test_encoded_cluster))
+#
+#     # Standardize the features for both training and test set using a cluster-specific scaler
+#     cluster_scaler = StandardScaler()
+#     X_train_final_cluster = cluster_scaler.fit_transform(X_train_final_cluster)
+#     X_test_final_cluster = cluster_scaler.transform(X_test_final_cluster)
+#     cluster_scalers[cluster] = cluster_scaler  # Store the scaler for this cluster
+#
+#     # Applying RBFSampler for this cluster to the training data
+#     cluster_rbf_sampler = RBFSampler(n_components=18, random_state=42)
+#     X_train_final_cluster = cluster_rbf_sampler.fit_transform(X_train_final_cluster)
+#     # Store the RBFSampler for this cluster
+#     cluster_rbfsamplers[cluster] = cluster_rbf_sampler
+#
+#     # Applying RBFSampler for this cluster to the test data
+#     X_test_final_cluster = cluster_rbfsamplers[cluster].transform(X_test_final_cluster)
+#
+#     # Train a KernelRidge model and measure its training time
+#     model_cluster = KernelRidge(kernel='rbf')
+#     model_cluster.fit(X_train_final_cluster, y_train_cluster_scaled)
+#
+#     cluster_models[cluster] = model_cluster  # Store the trained model
+#
+#     # Make predictions for this cluster
+#     y_pred_cluster_scaled = model_cluster.predict(X_test_final_cluster)
+#     y_pred_cluster = y_cluster_scalers[cluster].inverse_transform(y_pred_cluster_scaled.reshape(-1, 1)).ravel()
+#
+#     # Calculate RMSE for this cluster and store
+#     rmse_cluster = np.sqrt(mean_squared_error(y_test_cluster_scaled, y_pred_cluster_scaled))
+#     cluster_performances[cluster] = rmse_cluster
+#
+#     # Visualization for each cluster
+#     actual_test_accidents_cluster = y_test_cluster.groupby(X_test_cluster['Incident Year']).sum()
+#     predicted_test_accidents_cluster = pd.DataFrame(
+#         {'Incident Year': X_test_cluster['Incident Year'], 'Predicted': y_pred_cluster}
+#     ).groupby('Incident Year').sum()
+#
+#     plt.figure(figsize=(15, 7))
+#     plt.plot(actual_test_accidents_cluster.index, actual_test_accidents_cluster.values, label='Actual (Test)',
+#              marker='o', linestyle='--', color='green')
+#     plt.plot(predicted_test_accidents_cluster.index, predicted_test_accidents_cluster['Predicted'],
+#              label='Predicted (Test)', marker='x', color='red')
+#     plt.title(f'Yearly Accident Counts for Cluster {cluster} (with RBFSampler): Actual vs Predicted')
+#     plt.xlabel('Year')
+#     plt.ylabel('Accident Count')
+#     plt.legend()
+#     plt.grid(True)
+#     plt.show()
