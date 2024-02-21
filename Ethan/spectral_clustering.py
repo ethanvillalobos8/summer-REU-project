@@ -12,8 +12,6 @@ import matplotlib.pyplot as plt
 # Convert the graph to an adjacency matrix
 adj_matrix = nx.adjacency_matrix(G).toarray()
 
-print(adj_matrix)
-
 # Step 1: Apply RBF Kernel on the adjacency matrix
 gamma = 0.1
 adj_matrix_rbf = np.exp(-gamma * adj_matrix ** 2)
@@ -89,7 +87,14 @@ for label in set(labels):
 results.to_csv('cluster_results.csv', index=False)
 
 # Create a scatter plot to visualize the results
-# plt.figure(figsize=(8, 8))
-# for i in range(len(principalComponents)):
-#     plt.scatter(principalComponents[i][0], principalComponents[i][1], color=plt.cm.nipy_spectral(labels[i] / 10.), s=7)
-# plt.show()
+tick_label_fontsize = 14
+
+plt.figure(figsize=(8, 8))
+for i in range(len(principalComponents)):
+    plt.scatter(principalComponents[i][0], principalComponents[i][1],
+                color=plt.cm.nipy_spectral(labels[i] / 10.), s=7)
+
+plt.xticks(fontsize=tick_label_fontsize)
+plt.yticks(fontsize=tick_label_fontsize)
+
+plt.show()

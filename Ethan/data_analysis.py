@@ -1,5 +1,4 @@
 import os
-import time
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -50,20 +49,38 @@ cluster_counts = df['Cluster'].value_counts()
 print(cluster_counts)
 
 # Plot the distribution of clusters using seaborn
-# sns.countplot(x='Cluster', data=df)
-# plt.title('Cluster Distribution')
+sns.countplot(x='Cluster', data=df)
+plt.title('Cluster Distribution')
+
+axis_label_fontsize = 16
+tick_label_fontsize = 15
+colorbar_label_fontsize = 15
 
 # Temporal Analysis
-# temporal_df = df.groupby(['Incident Year', 'Cluster']).size().unstack().fillna(0)
-# plt.figure(figsize=(10, 8))
-# sns.heatmap(temporal_df, cmap='YlGnBu')
-# plt.title('Temporal Cluster Distribution')
+temporal_df = df.groupby(['Incident Year', 'Cluster']).size().unstack().fillna(0)
+plt.figure(figsize=(10, 8))
+ax = sns.heatmap(temporal_df, cmap='YlGnBu')
+plt.xlabel('Cluster', fontsize=axis_label_fontsize)
+plt.ylabel('Incident Year', fontsize=axis_label_fontsize)
+plt.xticks(fontsize=tick_label_fontsize)
+plt.yticks(fontsize=tick_label_fontsize)
+cbar = ax.collections[0].colorbar
+cbar.ax.tick_params(labelsize=colorbar_label_fontsize)
+plt.title('Temporal Cluster Distribution')
+plt.show()
 
 # Geographical Analysis
-# geographical_df = df.groupby(['State Name', 'Cluster']).size().unstack().fillna(0)
-# plt.figure(figsize=(10, 8))
-# sns.heatmap(geographical_df, cmap='YlGnBu')
-# plt.title('Geographical Cluster Distribution')
+geographical_df = df.groupby(['State Name', 'Cluster']).size().unstack().fillna(0)
+plt.figure(figsize=(10, 8))
+ax = sns.heatmap(geographical_df, cmap='YlGnBu')
+plt.xlabel('Cluster', fontsize=axis_label_fontsize)
+plt.ylabel('State Name', fontsize=axis_label_fontsize)
+plt.xticks(fontsize=tick_label_fontsize)
+plt.yticks(fontsize=tick_label_fontsize)
+cbar = ax.collections[0].colorbar
+cbar.ax.tick_params(labelsize=colorbar_label_fontsize)
+plt.title('Geographical Cluster Distribution')
+plt.show()
 
 # Define factors for analysis
 factors = ['Highway User Position', 'Equipment Involved', 'Equipment Type', 'Equipment Struck', 'Visibility',
@@ -97,94 +114,124 @@ for i in range(num_clusters):
         similarity_matrix[j, i] = avg_similarity
 
 # Create a heatmap to visualize cluster similarity
-# plt.figure(figsize=(10, 8))
-# sns.heatmap(similarity_matrix, cmap='YlGnBu', annot=True, fmt=".2f",
-#             xticklabels=df['Cluster'].unique(), yticklabels=df['Cluster'].unique())
-# plt.title('Cluster Similarity Based on Characteristics')
-# plt.xlabel('Cluster')
-# plt.ylabel('Cluster')
+plt.figure(figsize=(10, 8))
+sns.heatmap(similarity_matrix, cmap='YlGnBu', annot=True, fmt=".2f",
+            xticklabels=df['Cluster'].unique(), yticklabels=df['Cluster'].unique())
+plt.title('Cluster Similarity Based on Characteristics')
+plt.xlabel('Cluster')
+plt.ylabel('Cluster')
 
-# Create a dictionary to store similarity matrices for each factor
-similarity_matrices = {}
 
-# Calculate Jaccard similarity for each pair of clusters for each factor
+# Define Jaccard Similarity function
+def jaccard_similarity(set1, set2):
+    intersection = len(set1.intersection(set2))
+    union = len(set1.union(set2))
+    return intersection / union if union != 0 else 0.0
+
+
+# Define factors for analysis
+factors = ['Highway User Position', 'Equipment Involved', 'Equipment Type', 'Equipment Struck', 'Visibility',
+           'Weather Condition', 'Date', 'Time']
+
+# Label encode categorical factors
+label_encoders = {}
 for factor in factors:
-    num_clusters = len(df['Cluster'].unique())
-    similarity_matrix = np.zeros((num_clusters, num_clusters))
-
-    for i in range(num_clusters):
-        for j in range(i, num_clusters):
-            cluster_i = set(df[df['Cluster'] == i][factor])
-            cluster_j = set(df[df['Cluster'] == j][factor])
-
-            similarity = jaccard_similarity(cluster_i, cluster_j)
-
-            similarity_matrix[i, j] = similarity
-            similarity_matrix[j, i] = similarity
-
-    similarity_matrices[factor] = similarity_matrix
+    label_encoders[factor] = LabelEncoder()
+    df[factor] = label_encoders[factor].fit_transform(df[factor])
 
 # Create a subdirectory for saving PNG files
 if not os.path.exists("factor_heatmaps"):
     os.mkdir("factor_heatmaps")
 
-# Create an empty dictionary to store results
-factor_influence = {}
+# Calculate the baseline similarity matrix with all factors
+baseline_similarity_matrix = np.zeros((num_clusters, num_clusters))
 
-# Calculate the influence of each factor individually for all iterations
-# for num_factors in range(1, len(factors) + 1):
-#     selected_factors = factors[:num_factors]
-#
-#     num_clusters = len(df['Cluster'].unique())
-#     similarity_matrix = np.zeros((num_clusters, num_clusters))
-#
-#     for i in range(num_clusters):
-#         for j in range(i, num_clusters):
-#             similarities = []
-#             for factor in selected_factors:
-#                 cluster_i_vals = set(df[df['Cluster'] == i][factor])
-#                 cluster_j_vals = set(df[df['Cluster'] == j][factor])
-#
-#                 similarity = jaccard_similarity(cluster_i_vals, cluster_j_vals)
-#                 similarities.append(similarity)
-#
-#             avg_similarity = np.mean(similarities)
-#             similarity_matrix[i, j] = avg_similarity
-#             similarity_matrix[j, i] = avg_similarity
-#
-#     factor_influence[num_factors] = similarity_matrix
-#
-#     # Generate and save individual factor heatmaps
-#     for factor in selected_factors:
-#         plt.figure(figsize=(6, 4))
-#         sns.heatmap(factor_influence[num_factors], cmap='YlGnBu', annot=True, fmt=".2f",
-#                     xticklabels=df['Cluster'].unique(), yticklabels=df['Cluster'].unique())
-#         plt.title(f'Influence of {factor}')
-#         plt.xlabel('Cluster')
-#         plt.ylabel('Cluster')
-#
-#         # Save PNG files to the subdirectory
-#         filename = os.path.join("factor_heatmaps", f"{factor}_{num_factors}_heatmap.png")
-#         plt.savefig(filename)
-#         plt.close()
-#
-#     # Print the similarity matrix to console for each factor
-#     for factor in selected_factors:
-#         print(f"Similarity matrix for {factor} ({num_factors}/{len(factors)} Factors):")
-#         print(factor_influence[num_factors])
-#
-# # Visualize the influence of each factor across all iterations
-# plt.figure(figsize=(12, 10))
-# for num_factors, similarity_matrix in factor_influence.items():
-#     plt.subplot(3, 3, num_factors)
-#     sns.heatmap(similarity_matrix, cmap='YlGnBu', annot=True, fmt=".2f",
-#                 xticklabels=df['Cluster'].unique(), yticklabels=df['Cluster'].unique())
-#     plt.title(f'Influence of {num_factors}/{len(factors)} Factors')
-#     plt.xlabel('Cluster')
-#     plt.ylabel('Cluster')
-#
-# plt.tight_layout()
-# plt.show()
+# Calculate similarities with all factors
+for i in range(num_clusters):
+    for j in range(i, num_clusters):
+        baseline_similarities = []
+        for factor in factors:
+            cluster_i_vals = set(df[df['Cluster'] == i][factor])
+            cluster_j_vals = set(df[df['Cluster'] == j][factor])
+            baseline_similarity = jaccard_similarity(cluster_i_vals, cluster_j_vals)
+            baseline_similarities.append(baseline_similarity)
+
+        baseline_avg_similarity = np.mean(baseline_similarities)
+        baseline_similarity_matrix[i, j] = baseline_avg_similarity
+        baseline_similarity_matrix[j, i] = baseline_avg_similarity
+
+# Generate and save individual factor heatmaps showing their relative importance
+for factor in factors:
+    num_clusters = len(df['Cluster'].unique())
+    similarity_matrix = np.zeros((num_clusters, num_clusters))
+
+    # Calculate similarities without the current factor
+    for i in range(num_clusters):
+        for j in range(i, num_clusters):
+            similarities_excluding_current = []
+            for other_factor in factors:
+                if other_factor != factor:
+                    cluster_i_vals = set(df[df['Cluster'] == i][other_factor])
+                    cluster_j_vals = set(df[df['Cluster'] == j][other_factor])
+                    similarity = jaccard_similarity(cluster_i_vals, cluster_j_vals)
+                    similarities_excluding_current.append(similarity)
+
+            avg_similarity_excluding_current = np.mean(similarities_excluding_current)
+            similarity_matrix[i, j] = baseline_similarity_matrix[i, j] - avg_similarity_excluding_current
+            similarity_matrix[j, i] = similarity_matrix[i, j]
+
+    plt.figure(figsize=(6, 4))
+    sns.heatmap(similarity_matrix, cmap='YlGnBu', annot=True, fmt=".2f",
+                xticklabels=df['Cluster'].unique(), yticklabels=df['Cluster'].unique())
+    plt.title(f'Relative Importance of {factor}')
+    plt.xlabel('Cluster')
+    plt.ylabel('Cluster')
+
+    filename = os.path.join("factor_heatmaps", f"{factor}_relative_importance_heatmap.png")
+    plt.savefig(filename)
+    plt.close()
+
+    # Print the relative importance matrix
+    print(f"\nRelative importance matrix for {factor}:")
+    print(similarity_matrix)
+
+# Calculate the cumulative influence of factors
+factor_influence_relative = {}
+for num_factors in range(1, len(factors) + 1):
+    selected_factors = factors[:num_factors]
+
+    num_clusters = len(df['Cluster'].unique())
+    similarity_matrix = np.zeros((num_clusters, num_clusters))
+
+    for i in range(num_clusters):
+        for j in range(i, num_clusters):
+            similarities = []
+            for factor in selected_factors:
+                cluster_i_vals = set(df[df['Cluster'] == i][factor])
+                cluster_j_vals = set(df[df['Cluster'] == j][factor])
+
+                similarity = jaccard_similarity(cluster_i_vals, cluster_j_vals)
+                similarities.append(similarity)
+
+            # Normalize by the number of factors to get relative influence
+            avg_similarity = np.mean(similarities) / num_factors
+            similarity_matrix[i, j] = avg_similarity
+            similarity_matrix[j, i] = avg_similarity
+
+    factor_influence_relative[num_factors] = similarity_matrix
+
+# Visualize the relative cumulative influence of each factor across all iterations
+plt.figure(figsize=(12, 10))
+for num_factors, similarity_matrix in factor_influence_relative.items():
+    plt.subplot(3, 3, num_factors)
+    sns.heatmap(similarity_matrix, cmap='YlGnBu', annot=True, fmt=".2f",
+                xticklabels=df['Cluster'].unique(), yticklabels=df['Cluster'].unique())
+    plt.title(f'Relative Cumulative Influence ({num_factors}/{len(factors)} Factors)')
+    plt.xlabel('Cluster')
+    plt.ylabel('Cluster')
+
+plt.tight_layout()
+plt.show()
 
 # Add other factors interested in
 extended_factors = ['State Name', 'Railroad Code', 'Incident Year']
@@ -264,8 +311,8 @@ y_pred_scaled = global_model.predict(X_test_final)
 y_pred = y_scaler.inverse_transform(y_pred_scaled.reshape(-1, 1)).ravel()
 
 # Calculate RMSE for the global model
-global_rmse = np.sqrt(mean_squared_error(y_test_scaled, y_pred_scaled))
-print(f"Global Model RMSE: {global_rmse:.2f}")
+global_rmse_scaled = np.sqrt(mean_squared_error(y_test_scaled, y_pred_scaled))
+print(f"Global Model Scaled RMSE: {global_rmse_scaled:.2f}")
 
 # Process and evaluate models for each cluster
 clusters = df['Cluster'].unique()
@@ -306,13 +353,16 @@ for cluster in clusters:
     model_cluster.fit(X_train_final_cluster, y_train_cluster_scaled)
     cluster_models[cluster] = model_cluster
 
-    # Predict and inverse transform the cluster-specific predictions
-    y_pred_cluster_scaled = model_cluster.predict(X_test_final_cluster)
-    y_pred_cluster = y_cluster_scalers[cluster].inverse_transform(y_pred_cluster_scaled.reshape(-1, 1)).ravel()
+    # # Predict and inverse transform the cluster-specific predictions
+    # y_pred_cluster_scaled = model_cluster.predict(X_test_final_cluster)
+    # y_pred_cluster = y_cluster_scalers[cluster].inverse_transform(y_pred_cluster_scaled.reshape(-1, 1)).ravel()
 
-    # Calculate and print RMSE for the cluster
-    rmse_cluster = np.sqrt(mean_squared_error(y_test_cluster, y_pred_cluster))
-    print(f"Cluster {cluster}: RMSE: {rmse_cluster:.2f}")
+    # Make predictions for this cluster
+    y_pred_cluster_scaled = cluster_models[cluster].predict(X_test_final_cluster)
+
+    # Calculate RMSE for this cluster using scaled values
+    rmse_cluster_scaled = np.sqrt(mean_squared_error(y_test_cluster_scaled, y_pred_cluster_scaled))
+    print(f"Cluster {cluster} Scaled RMSE: {rmse_cluster_scaled:.2f}")
 
 # Visualization for global and cluster-specific models
 # Global model visualization
@@ -351,11 +401,14 @@ for cluster in clusters:
 
     # Visualization for this cluster
     actual_test_accidents_cluster = y_test_cluster.groupby(X_test_cluster['Incident Year']).sum()
-    predicted_test_accidents_cluster = pd.DataFrame({'Incident Year': X_test_cluster['Incident Year'], 'Predicted': y_pred_cluster}).groupby('Incident Year').sum()
+    predicted_test_accidents_cluster = pd.DataFrame(
+        {'Incident Year': X_test_cluster['Incident Year'], 'Predicted': y_pred_cluster}).groupby('Incident Year').sum()
 
     plt.figure(figsize=(15, 7))
-    plt.plot(actual_test_accidents_cluster.index, actual_test_accidents_cluster.values, label='Actual (Test)', marker='o', linestyle='--', color='green')
-    plt.plot(predicted_test_accidents_cluster.index, predicted_test_accidents_cluster['Predicted'], label='Predicted (Test)', marker='x', color='red')
+    plt.plot(actual_test_accidents_cluster.index, actual_test_accidents_cluster.values, label='Actual (Test)',
+             marker='o', linestyle='--', color='green')
+    plt.plot(predicted_test_accidents_cluster.index, predicted_test_accidents_cluster['Predicted'],
+             label='Predicted (Test)', marker='x', color='red')
     plt.title(f'Yearly Accident Counts for Cluster {cluster}: Actual vs Predicted')
     plt.xlabel('Year')
     plt.ylabel('Accident Count')
